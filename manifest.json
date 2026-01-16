@@ -3,7 +3,7 @@
 	"name": "Delta",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "Roam-style Delta (Δ) for resurfacing blocks on future daily notes using spaced repetition",
+	"description": "Roam-style Delta (Δ) for resurfacing blocks on future daily notes using spaced repetition.",
 	"author": "Felix Clack",
 	"authorUrl": "https://github.com/felixclack",
 	"fundingUrl": "",
