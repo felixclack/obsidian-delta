@@ -391,6 +391,11 @@ export default class DeltaPlugin extends Plugin {
 			lines.forEach((line, index) => {
 				const delta = this.parseDeltaTag(line);
 				if (delta && delta.dueDate <= today) {
+					// Skip completed items (marked with [x] or ✅)
+					if (line.includes('[x]') || line.includes('✅')) {
+						return;
+					}
+
 					// Extract block ID if present
 					const blockIdMatch = line.match(/\^([a-zA-Z0-9]+)\s*$/);
 					const blockId = blockIdMatch ? blockIdMatch[1] : null;
@@ -495,7 +500,52 @@ export default class DeltaPlugin extends Plugin {
 		const newContent = content.slice(0, insertPosition) + deltaSection + content.slice(insertPosition);
 		await this.app.vault.modify(file, newContent);
 
+		// IMPORTANT: Remove delta tags from source items after surfacing
+		// This prevents the same items from appearing every day
+		await this.clearSurfacedDeltaTags(externalItems);
+
 		new Notice(`Δ ${externalItems.length} items due today`);
+	}
+
+	// Remove delta tags from items that have been surfaced in the daily note
+	async clearSurfacedDeltaTags(items: DueItem[]) {
+		// Group items by file to minimize file operations
+		const itemsByFile = new Map<string, DueItem[]>();
+		for (const item of items) {
+			if (!itemsByFile.has(item.file.path)) {
+				itemsByFile.set(item.file.path, []);
+			}
+			itemsByFile.get(item.file.path)!.push(item);
+		}
+
+		// Process each file once
+		for (const [filePath, fileItems] of itemsByFile) {
+			const file = this.app.vault.getAbstractFileByPath(filePath) as TFile;
+			if (!file) continue;
+
+			let content = await this.app.vault.read(file);
+			let modified = false;
+
+			// Sort by line number descending so we don't invalidate line numbers
+			fileItems.sort((a, b) => b.line - a.line);
+
+			const lines = content.split('\n');
+			for (const item of fileItems) {
+				if (item.line < lines.length) {
+					const line = lines[item.line];
+					const delta = this.parseDeltaTag(line);
+					if (delta) {
+						// Remove the delta tag but keep the rest of the line
+						lines[item.line] = line.replace(delta.fullMatch, '').replace(/\s+$/, '');
+						modified = true;
+					}
+				}
+			}
+
+			if (modified) {
+				await this.app.vault.modify(file, lines.join('\n'));
+			}
+		}
 	}
 }
 
